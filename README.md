@@ -2,6 +2,8 @@
 Library to pre-process scanned historical images for Structure from Motion (SfM) surface reconstruction and photogrammetric analysis. 
 [![DOI](https://zenodo.org/badge/287390486.svg)](https://zenodo.org/badge/latestdoi/287390486)
 
+## NOTE: this repo was forked from Fredrich Knuth's HIPP package
+This fork contains changes by Julian Cross (jcross@blm.gov) to the original HIPP package to allow for query, download, and preprocessing of orphaned frames in the US Bureau of Land Management's historic aerial single frame holdings in USGS Earth Explorer.
 
 ### Features
 

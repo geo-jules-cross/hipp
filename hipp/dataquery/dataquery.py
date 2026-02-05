@@ -290,7 +290,122 @@ def EE_pre_select_images(apiKey,
     
     results_df = EE_convert_api_responses_to_dataframe(scenes['results'])
     return results_df
+
+def EE_pre_select_images_metadata_filter(
+    apiKey,
+    maxResults,
+    metadataType='full',     # 'summary' or 'full'
+    datasetName='aerial_combin',
+    serviceUrl='https://m2m.cr.usgs.gov/api/api/json/stable/',
     
+    # Filters (all optional; controlled by the use* flags below)
+    startDate=None,
+    endDate=None,
+    bbox=None, # tuple: (xmin, ymin, xmax, ymax)
+
+    # Metadata filter params (values to match; see field-name params below)
+    agency=None,
+    project=None,
+
+    # Field-name params (set these to the actual keys in your dataset’s metadata)
+    agency_filterID="5e83d8e52418866c",
+    project_filterID='5e83d8e58ec9fd97',
+
+    # Enable/disable individual filters
+    useSpatialFilter=True,
+    useAcquisitionFilter=True,
+    useMetadataFilter=True
+):
+    """
+    JMC-edit: changed this function to allow search and download of orphaned frames
+    Builds a USGS M2M 'scene-search' request with optional spatial, acquisition, and metadata filters.
+      - When useSpatialFilter=False, bbox is ignored and not required.
+      - When useAcquisitionFilter=False, startDate/endDate are ignored and not required.
+      - When useMetadataFilter=True, metadata filters are included if agency/project values AND their field names are provided.
+    """
+
+    print('Dataset:', datasetName)
+    print('Max records requested:', maxResults)
+
+    # ---- Spatial filter (optional) ----
+    spatialFilter = None
+    if useSpatialFilter:
+        if bbox is None:
+            raise ValueError("bbox is required when useSpatialFilter=True (xmin, ymin, xmax, ymax).")
+        if len(bbox) != 4:
+            raise ValueError("bbox must be a 4-tuple: (xmin, ymin, xmax, ymax).")
+        xmin, ymin, xmax, ymax = bbox
+        if not (xmin < xmax and ymin < ymax):
+            raise ValueError("Invalid bbox: expected xmin < xmax and ymin < ymax.")
+        print('Bounds:\n  xmin', xmin, '\n  ymin', ymin, '\n  xmax', xmax, '\n  ymax', ymax)
+        spatialFilter = {
+            'filterType': 'mbr',
+            'lowerLeft':  {'latitude': ymin, 'longitude': xmin},
+            'upperRight': {'latitude': ymax, 'longitude': xmax}
+        }
+
+    # ---- Acquisition filter (optional) ----
+    acquisitionFilter = None
+    if useAcquisitionFilter:
+        if not startDate or not endDate:
+            raise ValueError("startDate and endDate are required when useAcquisitionFilter=True.")
+        print('Time range:', startDate, 'to', endDate)
+        acquisitionFilter = {'start': startDate, 'end': endDate}
+
+    # ---- Metadata filter (optional; flexible builder) ----
+    metadataFilter = None
+    if useMetadataFilter:
+        child_filters = []
+
+        # Build a single child filter from field and value
+        def _child(field_name, value, operand):
+                return {'filterType': 'value', 'filterID': field_name, 'value': value, 'operand': operand}
+
+        # Only add filters when both a field name and a value are provided
+        if agency:
+            child_filters.append(_child(agency_filterID, agency, 'equal'))
+        if project:
+            child_filters.append(_child(project_filterID, project, 'equal'))
+
+        if child_filters:
+            metadataFilter = {
+                'filterType': 'and',      # use 'or' if you want agency OR project
+                'childFilters': child_filters
+            }
+            print('Metadata filter:', metadataFilter)
+
+    # ---- Compose sceneFilter only with enabled sub-filters ----
+    sceneFilter = {}
+
+    if spatialFilter is not None:
+        sceneFilter['spatialFilter'] = spatialFilter
+
+    if acquisitionFilter is not None:
+        sceneFilter['acquisitionFilter'] = acquisitionFilter
+
+    if metadataFilter is not None:
+        sceneFilter['metadataFilter'] = metadataFilter
+
+    # ---- Request payload ----
+    datasetSearchParameters = {
+        'datasetName': datasetName,
+        'maxResults': maxResults,
+        'sceneFilter': sceneFilter,   # can be empty {} if no sub-filters were enabled
+        'metadataType': metadataType
+    }
+
+    print(datasetSearchParameters)
+
+    scenes = EE_sendRequest(serviceUrl + "scene-search", datasetSearchParameters, apiKey)
+    print('Records returned:', scenes['recordsReturned'])
+    
+    if scenes['recordsReturned'] == maxResults:
+        print("maxResults set to:", maxResults, 
+              'Increase this parameter to obtain additional records. API max 50,000.')
+    
+    results_df = EE_convert_api_responses_to_dataframe(scenes['results'])
+    return results_df
+
 def EE_sendRequest(url, data, apiKey = None):  
     json_data = json.dumps(data)
     
@@ -460,7 +575,8 @@ def EE_stageForDownload(apiKey,
                 if 'NAG' in req['entityId']:
                     name = req['entityId'] + '.tif' #NAGAP images aren't zipped
                 else:
-                    name = req['entityId'] + '.tif.gz'
+                    #name = req['entityId'] + '.tif.gz'
+                    name = req['entityId'] + '.tif' # JMC-edit, images are not zipped
                 urls_hi.append(req['url'])
                 filenames_hi.append(name)
             
