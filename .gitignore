@@ -11,3 +11,32 @@ examples/alaska_orphaned_frames/deprecated
 # Ignore these files
 examples/alaska_orphaned_frames/token.txt
 examples/alaska_orphaned_frames/metadata_filter.json
+
+# Ignore these files related to the package install
+hipp.egg-info/top_level.txt
+hipp.egg-info/SOURCES.txt
+hipp.egg-info/PKG-INFO
+hipp.egg-info/dependency_links.txt
+hipp/utils/__pycache__/utils.cpython-310.pyc
+hipp/utils/__pycache__/__init__.cpython-310.pyc
+hipp/tools/__pycache__/tools.cpython-310.pyc
+hipp/tools/__pycache__/__init__.cpython-310.pyc
+hipp/qc/__pycache__/qc.cpython-310.pyc
+hipp/qc/__pycache__/__init__.cpython-310.pyc
+hipp/plot/__pycache__/plot.cpython-310.pyc
+hipp/plot/__pycache__/__init__.cpython-310.pyc
+hipp/math/__pycache__/math.cpython-310.pyc
+hipp/math/__pycache__/__init__.cpython-310.pyc
+hipp/io/__pycache__/io.cpython-310.pyc
+hipp/io/__pycache__/__init__.cpython-310.pyc
+hipp/image/__pycache__/image.cpython-310.pyc
+hipp/image/__pycache__/__init__.cpython-310.pyc
+hipp/geospatial/__pycache__/geospatial.cpython-310.pyc
+hipp/geospatial/__pycache__/__init__.cpython-310.pyc
+hipp/dataquery/__pycache__/dataquery.cpython-310.pyc
+hipp/dataquery/__pycache__/__init__.cpython-310.pyc
+hipp/core/__pycache__/core.cpython-310.pyc
+hipp/core/__pycache__/__init__.cpython-310.pyc
+hipp/batch/__pycache__/batch.cpython-310.pyc
+hipp/batch/__pycache__/__init__.cpython-310.pyc
+hipp/__pycache__/__init__.cpython-310.pyc
