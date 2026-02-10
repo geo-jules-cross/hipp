@@ -13,6 +13,7 @@ import time
 import urllib
 import shutil
 from tqdm import tqdm
+import re
 
 import hipp.io
 import hipp.utils
@@ -24,30 +25,160 @@ Library query and download historical image data from public archives.
 
 ### GENERIC FUNCTIONS
 
-def download_image(output_directory, 
+def parse_content_disposition_filename(cd_header: str) -> str | None:
+    """
+    Parse RFC 6266 Content-Disposition to extract filename or filename*.
+    Handles quoted forms, UTF-8 percent-encoding, and basic cases.
+
+    Examples:
+      attachment; filename="AR5750022260121.tif.gz"
+      attachment; filename*=UTF-8''AR5750022260121.tif.gz
+    """
+    if not cd_header:
+        return None
+
+    # Try filename* (RFC 5987 / 6266 extended parameter)
+    m = re.search(r"""filename\*\s*=\s*(?:[A-Za-z0-9\-]+\'\')?([^;]+)""", cd_header, re.IGNORECASE)
+    if m:
+        raw = m.group(1).strip().strip('"')
+        return urllib.parse.unquote(raw)
+
+    # Fallback: classic filename=
+    m = re.search(r"""filename\s*=\s*"?(?P<fn>[^";]+)"?""", cd_header, re.IGNORECASE)
+    if m:
+        return m.group('fn').strip()
+
+    return None
+
+
+def infer_server_filename_and_resp(url: str, session: requests.Session | None = None, timeout: int = 60):
+    """
+    Issue a streaming GET to obtain headers, infer a reliable filename (incl. extension),
+    and return (filename, response). Caller is responsible for closing response after reading.
+    """
+    sess = session or requests.Session()
+    resp = sess.get(url, stream=True, allow_redirects=True, timeout=timeout)
+
+    cd = resp.headers.get('Content-Disposition', '')
+    fn = parse_content_disposition_filename(cd)
+
+    # If header didn't yield a name, try the final URL path.
+    if not fn:
+        path = urllib.parse.urlparse(resp.url).path
+        base = os.path.basename(path)
+        # Accept if it has an extension.
+        if '.' in base:
+            fn = base
+
+    # If we still don't have an extension, consult Content-Type to pick one.
+    # (These are the typical types for EROS/EarthExplorer)
+    ctype = (resp.headers.get('Content-Type') or '').split(';', 1)[0].strip().lower()
+    ext_map = {
+        'application/pdf'      : '.pdf',
+        'image/tiff'           : '.tif',
+        'application/gzip'     : '.gz',
+        'application/x-gzip'   : '.gz',
+        # Some servers report TIFF as octet-stream; assume .tif if we have no better guess.
+        'application/octet-stream': '.tif',
+    }
+
+    # If filename exists but has no extension, append one based on Content-Type.
+    if fn:
+        root, ext = os.path.splitext(fn)
+        if ext == '':
+            guessed = ext_map.get(ctype)
+            if guessed:
+                fn = root + guessed
+    else:
+        # As a last resort, synthesize a name.
+        guessed = ext_map.get(ctype, '.bin')
+        fn = f'download{guessed}'
+
+    return fn, resp
+
+# def download_image(output_directory, 
+#                    payload,
+#                    default_img_ext = '.tif'):
+#     url, file_name = payload
+#     path_name, base_name, ext = hipp.io.split_file(os.path.abspath(file_name))
+#     if ext == '':
+#         output_file = os.path.join(output_directory, base_name + default_img_ext)
+#     else:
+#         output_file = os.path.join(output_directory, base_name + ext)
+#     urllib.request.urlretrieve(url,output_file)
+#     return output_file
+
+def download_image(output_directory,
                    payload,
-                   default_img_ext = '.tif'):
+                   default_img_ext='.tif',
+                   trust_server_filename=True,
+                   chunk_size=1024*1024):
+    """
+    payload: (url, file_name_from_staging)
+    - If file_name_from_staging lacks extension OR trust_server_filename=True,
+      we query headers and derive the final filename/extension.
+    - Writes streaming chunks to avoid large memory use.
+    """
     url, file_name = payload
     path_name, base_name, ext = hipp.io.split_file(os.path.abspath(file_name))
-    if ext == '':
-        output_file = os.path.join(output_directory, base_name + default_img_ext)
+
+    # Decide whether to consult the server for a definitive filename/ext
+    use_server = trust_server_filename or (ext == '')
+
+    if use_server:
+        try:
+            # Create a per-thread session for better connection reuse in ThreadPoolExecutor
+            session = requests.Session()
+            server_fn, resp = infer_server_filename_and_resp(url, session=session)
+        except Exception as e:
+            # If headers/GET fail, fall back to local default logic
+            # Note: make sure to close any partial response
+            try:
+                resp.close()
+            except:
+                pass
+            if ext == '':
+                output_file = os.path.join(output_directory, base_name + default_img_ext)
+            else:
+                output_file = os.path.join(output_directory, base_name + ext)
+            # Fallback to urlretrieve
+            urllib.request.urlretrieve(url, output_file)
+            return output_file
+
+        # Choose output filename: prefer server filename to preserve true extension (.tif.gz, .pdf, etc.)
+        output_file = os.path.join(output_directory, server_fn)
+
+        # Stream to disk
+        with open(output_file, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=chunk_size):
+                if chunk:
+                    f.write(chunk)
+        resp.close()
+        session.close()
+        return output_file
+
     else:
-        output_file = os.path.join(output_directory, base_name + ext)
-    urllib.request.urlretrieve(url,output_file)
-    return output_file
+        # Original behavior (no server header check)
+        if ext == '':
+            output_file = os.path.join(output_directory, base_name + default_img_ext)
+        else:
+            output_file = os.path.join(output_directory, base_name + ext)
+        urllib.request.urlretrieve(url, output_file)
 
 def thread_downloads(output_directory, urls, file_names, max_workers=5):
     with tqdm(total=len(urls)) as pbar:
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
         future_to_url = {pool.submit(download_image,
                                      output_directory,
-                                     x): x for x in zip(urls, file_names)}
-        results=[]
+                                     x,
+                                     trust_server_filename=True
+                                     ): x for x in zip(urls, file_names)}
+        results = []
         for future in concurrent.futures.as_completed(future_to_url):
             r = future.result()
             results.append(r)
             pbar.update(1)
-#             print('Download complete for:',r)
+            # print('Download complete for:',r)
 
 def EE_download_images_to_disk(
     apiKey,
@@ -73,7 +204,6 @@ def EE_download_images_to_disk(
         return None, None, None
     
     urls_cal, filenames_cal, urls_hi, filenames_hi, urls_med, filenames_med = r
-    
 
     c = 0
     retries = 4
@@ -390,7 +520,11 @@ def EE_create_search_payload(
         "sceneFilter": sceneFilter,   # can be empty {} if no sub-filters were enabled
         "metadataType": metadataType
     }
-    print(searchPayload)
+    
+    # Pretty-printed JSON (human-readable)
+    searchPayload_json = json.dumps(searchPayload, indent=4)
+    print(searchPayload_json)
+
     return searchPayload
 
 def EE_sendRequest(url, data, apiKey = None):  
@@ -401,7 +535,7 @@ def EE_sendRequest(url, data, apiKey = None):
     else:
         headers = {'X-Auth-Token': apiKey}              
         response = requests.post(url, json_data, headers = headers)    
-    
+
     try:
         httpStatusCode = response.status_code
         if response == None:
@@ -560,13 +694,14 @@ def EE_stageForDownload(apiKey,
         for req in filtered_reqs_hi:
             if req['entityId'] in entityIds:
                 if 'NAG' in req['entityId']:
-                    name = req['entityId'] + '.tif' #NAGAP images aren't zipped
+                    name = req['entityId'] + '.tif' # NAGAP images aren't zipped
                 else:
-                    #name = req['entityId'] + '.tif.gz'
-                    name = req['entityId'] + '.tif' # JMC-edit, images are not zipped
+                    name = req['entityId'] + '.tif.gz'
+                    #name = req['entityId'] + '.tif'
                 urls_hi.append(req['url'])
                 filenames_hi.append(name)
-            
+    
+        
         urls_med = []
         filenames_med = []
         for req in filtered_reqs_med:
