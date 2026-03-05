@@ -271,24 +271,25 @@ def EE_download_images_to_disk(
             print('Images in:', images_directory)
             print('Calibration reports in:', calibration_reports_directory)
 
-            if invert_color:
-                print('Correcting origin for all images.')
-                print('Inverting color for all images.\n')
-            else:
-                print('Correcting origin for all images.\n')
-            def fix_grid_org(f):
-                im = cv2.imread(f)
-                if invert_color:
-                    im = np.max(im) - im
-                cv2.imwrite(f, im)
+            # JMC Edit - removing this functionality that corrects the origin
+            # if invert_color:
+            #     print('Correcting origin for all images.')
+            #     print('Inverting color for all images.\n')
+            # else:
+            #     print('Correcting origin for all images.\n')
+            # def fix_grid_org(f):
+            #     im = cv2.imread(f)
+            #     if invert_color:
+            #         im = np.max(im) - im
+            #     cv2.imwrite(f, im)
 
-            original_raw_tif_files = glob.glob(os.path.join(images_directory, '*.tif'))
-            with tqdm(total=len(urls)) as pbar:
-                pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-                reorged_futures = {pool.submit(fix_grid_org, x): x for x in original_raw_tif_files}
-                for future in concurrent.futures.as_completed(reorged_futures):
-                    r = future.result()
-                    pbar.update(1)
+            # original_raw_tif_files = glob.glob(os.path.join(images_directory, '*.tif'))
+            # with tqdm(total=len(urls)) as pbar:
+            #     pool = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+            #     reorged_futures = {pool.submit(fix_grid_org, x): x for x in original_raw_tif_files}
+            #     for future in concurrent.futures.as_completed(reorged_futures):
+            #         r = future.result()
+            #         pbar.update(1)
         return images_directory, calibration_reports_directory, pixel_pitch
 
     else:
