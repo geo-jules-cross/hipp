@@ -27,6 +27,7 @@ Library query and download historical image data from public archives.
 
 def parse_content_disposition_filename(cd_header: str) -> str | None:
     """
+    JMC edit: added this fuction
     Parse RFC 6266 Content-Disposition to extract filename or filename*.
     Handles quoted forms, UTF-8 percent-encoding, and basic cases.
 
@@ -53,6 +54,7 @@ def parse_content_disposition_filename(cd_header: str) -> str | None:
 
 def infer_server_filename_and_resp(url: str, session: requests.Session | None = None, timeout: int = 60):
     """
+    JMC edit: added this fuction
     Issue a streaming GET to obtain headers, infer a reliable filename (incl. extension),
     and return (filename, response). Caller is responsible for closing response after reading.
     """
@@ -230,17 +232,26 @@ def EE_download_images_to_disk(
     urls.extend(urls_cal)
     filenames.extend(filenames_cal)
 
-    if len(filenames_med) > len(filenames_hi):
-        print('More images were returned at medium resolution.')
-        print('Proceeding with medium resolution images only.')
-        urls.extend(urls_med)
-        filenames.extend(filenames_med)
-        pixel_pitch = 0.063
-    elif filenames_hi:
-        print('Downloading high resolution images only.')
-        urls.extend(urls_hi)
-        filenames.extend(filenames_hi)
-        pixel_pitch = 0.025
+    # JMC edit: most high-resolution scans from Earth Explorer are 25 microns (0.025mm)
+    # All BLM film was scanned at 14 microns (0.014mm)
+    # Download only high resolution and set default pixel_pitch to 0.014
+
+    print('Downloading BLM high resolution scans.')
+    urls.extend(urls_hi)
+    filenames.extend(filenames_hi)
+    pixel_pitch = 0.014
+    
+    # if len(filenames_med) > len(filenames_hi):
+    #     print('More images were returned at medium resolution.')
+    #     print('Proceeding with medium resolution images only.')
+    #     urls.extend(urls_med)
+    #     filenames.extend(filenames_med)
+    #     pixel_pitch = 0.063
+    # elif filenames_hi:
+    #     print('Downloading high resolution images only.')
+    #     urls.extend(urls_hi)
+    #     filenames.extend(filenames_hi)
+    #     pixel_pitch = 0.025
 
     if filenames_med or filenames_hi: 
         print('Pixel pitch:',str(pixel_pitch))
@@ -271,7 +282,7 @@ def EE_download_images_to_disk(
             print('Images in:', images_directory)
             print('Calibration reports in:', calibration_reports_directory)
 
-            # JMC Edit - removing this functionality that corrects the origin
+            # JMC edit - removing this functionality that corrects the origin
             # if invert_color:
             #     print('Correcting origin for all images.')
             #     print('Inverting color for all images.\n')
@@ -713,7 +724,9 @@ def EE_stageForDownload(apiKey,
         
         print('Found:')
         print('  ',len(filenames_cal),'calibration reports')
-        print('  ',len(filenames_hi),'hi-res (25 micron) scans')
+        print('  ',len(filenames_hi),'hi-res (14 micron) BLM scans')
+        #JMC edit
+        # print('  ',len(filenames_hi),'hi-res (25 micron) scans')
         print('  ',len(filenames_med),'med-res (63 micron) scans')
         
         return urls_cal, filenames_cal, urls_hi, filenames_hi, urls_med, filenames_med
