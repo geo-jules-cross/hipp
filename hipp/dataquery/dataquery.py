@@ -275,7 +275,7 @@ def EE_download_images_to_disk(
             # JMC edit: EE is inconsistent with when files are zipped, there can be a mix
             print(len(images), 'images downloaded.')
             # Trigger unzip if any .gz file exists in the output directory
-            if any(images.glob('*.gz')):
+            if any(pathlib.Path(output_directory).glob('*.gz')):
                 hipp.io.gzip_dir(images)
 
             hipp.io.move_files(output_directory, images_directory, '.tif')
