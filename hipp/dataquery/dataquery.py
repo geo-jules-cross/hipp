@@ -276,7 +276,7 @@ def EE_download_images_to_disk(
             print(len(images), 'images downloaded.')
             # Trigger unzip if any .gz file exists in the output directory
             if any(pathlib.Path(output_directory).glob('*.gz')):
-                hipp.io.gzip_dir(images)
+                hipp.io.gzip_dir(output_directory)
 
             hipp.io.move_files(output_directory, images_directory, '.tif')
             hipp.io.move_files(output_directory, calibration_reports_directory, '.pdf')
