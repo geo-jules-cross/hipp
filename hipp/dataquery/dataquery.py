@@ -272,9 +272,12 @@ def EE_download_images_to_disk(
             )                       
 
             images = sorted(list(pathlib.Path(output_directory).glob('*tif*')))
+            # JMC edit: EE is inconsistent with when files are zipped, there can be a mix
             print(len(images), 'images downloaded.')
-            if images[0].as_posix()[-7:] == '.tif.gz':
-                hipp.io.gzip_dir(output_directory)
+            # Trigger unzip if any .gz file exists in the output directory
+            if any(out.glob('*.gz')):
+                hipp.io.gzip_dir(out)
+
 
             hipp.io.move_files(output_directory, images_directory, '.tif')
             hipp.io.move_files(output_directory, calibration_reports_directory, '.pdf')
@@ -282,7 +285,7 @@ def EE_download_images_to_disk(
             print('Images in:', images_directory)
             print('Calibration reports in:', calibration_reports_directory)
 
-            # JMC edit - removing this functionality that corrects the origin
+            # JMC edit: removing this functionality that corrects the origin
             # if invert_color:
             #     print('Correcting origin for all images.')
             #     print('Inverting color for all images.\n')
@@ -535,7 +538,7 @@ def EE_create_search_payload(
     
     # Pretty-printed JSON (human-readable)
     searchPayload_json = json.dumps(searchPayload, indent=4)
-    print(searchPayload_json)
+    #print(searchPayload_json)
 
     return searchPayload
 
@@ -727,7 +730,7 @@ def EE_stageForDownload(apiKey,
         print('  ',len(filenames_hi),'hi-res (14 micron) BLM scans')
         #JMC edit
         # print('  ',len(filenames_hi),'hi-res (25 micron) scans')
-        print('  ',len(filenames_med),'med-res (63 micron) scans')
+        #print('  ',len(filenames_med),'med-res (63 micron) scans')
         
         return urls_cal, filenames_cal, urls_hi, filenames_hi, urls_med, filenames_med
     
